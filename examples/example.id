@@ -1,4 +1,4 @@
-use IRCClient from . irclib;
+use IRCClient from irclib;
 
 SERVER = "107.191.108.159"; # Change to your server
 PORT = 6667;
@@ -18,5 +18,5 @@ func main () {
         print ("#{sender} #{channel} #{command}");
         client.say (channel, command);
     }
-    client.connect (server, port, false);
+    client.connect (SERVER, PORT, false);
 }
