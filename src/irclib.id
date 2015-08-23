@@ -1,0 +1,174 @@
+use ssl;
+use socket;
+
+class IRCClient {
+	
+	func IRCClient (self) {
+        self.sock = socket.socket (socket.SOCK_STREAM, socket.PROTO_TCP);
+        self.onConnectionMade = Event ();
+		self.onPrivmsg = Event ();
+		self.onJoined = Event ();
+		self.onParted = Event ();
+		self.onUserJoined = Event ();
+        self.onKicked = Event ();
+        self.onUserKicked = Event ();
+        self.nick = "IRCClient";
+        self.hostname = "IRCClient";
+        self.servername = "IRCClient";
+        self.realname = "IRCClient";
+	}
+
+	func connect (self, ip, port, params args) {
+        useSsl = false;
+        if (args.getSize () > 0) {
+            useSsl = args [0];
+        }
+        self.ipAddress = ip;
+        self.port = port;
+		self.sock.connect (self.ipAddress, self.port);
+        self.stream = self.sock.getStream ();
+        if (useSsl) {
+            self.stream = ssl.wrapStream (self.stream);
+        }
+        self._connectionMade ();
+        self.sendRaw ("USER {} {} {} :{}", self.nick, 
+            self.hostname,
+            self.servername,
+            self.realname);
+            
+		self.sendRaw ("NICK {}", self.nick);
+        
+		while (true) {
+			line = self.stream.readLine ().trim ();
+            if (line.getSize () > 0)
+                self.handleResponse (line);
+		}
+	}
+
+	func handleResponse (self, msg) {
+		if (msg.startsWith ("PING")) {
+            self.sendRaw ("PONG :{}", msg.substr (msg.indexOf (":") + 1));
+		} else if (msg.startsWith(":")) {
+			prefix = msg.substr (1);
+			if (prefix.contains (":")) {
+				command = prefix.substr (prefix.indexOf(":") + 1);
+				prefix = prefix.substr (0, prefix.indexOf (":"));
+				prefix = prefix.split (" ");
+                if (prefix.getSize () < 2)
+                    return;
+                switch (prefix [1]) {
+                    case "PRIVMSG" {
+                        sender = prefix [0].substr (0, prefix[0].indexOf ("!"));
+                        channel = prefix [2];
+                        self._privmsg (sender, channel, command);
+                    }
+                    case "JOIN" {
+                        sender = prefix[0].substr (0, prefix[0].indexOf ("!"));
+                        if (sender == self.nick) {
+                            self._joined (command);
+                        } else {
+                            self._userJoined (sender, command);
+                        }
+                    }
+                    case "PART" {
+                        sender = prefix[0].substr (0, prefix[0].indexOf ("!"));
+                        if (sender == self.nick) {
+                            self._parted (prefix [2], command);
+                        } else {
+                            self._userParted (sender, prefix [2], command);
+                        }
+                    }
+                    case "QUIT" {
+                        sender = prefix[0].substr (0, prefix[0].indexOf ("!"));
+                        if (sender == self.nick) {
+                            self._parted (command);
+                        } else {
+                            self._userQuit (sender, command);
+                        }
+                    }
+                    case "KICK" {
+                        sender = prefix[0].substr (0, prefix[0].indexOf ("!"))
+                        if (prefix [3] == self.nick) {
+                            self._kicked (sender, prefix [2], command);
+                        } else {
+                            self._userKicked (sender, prefix [2], command);
+                        }
+                    }
+                }
+			}
+		}
+	}
+    
+    func sendRaw (self, format, params args) {
+        self.stream.write (format.format (*args) + "\r\n");
+    }
+    
+	func say (self, channel, msg) {
+		if (channel != self.nick) {
+            self.sendRaw ("PRIVMSG {} :{}", channel, msg);
+		}
+	}
+
+	func join (self, channel) {
+        self.sendRaw ("JOIN {}", channel);
+	}
+
+	func part (self, channel) {
+        self.sendRaw ("PART {}", channel);
+	}
+    
+    func connectionMade (self) { }
+    func privmsg (self, sender, channel, command) { }
+    func joined (self, channel) { }
+    func parted (self, channel, reason) { }
+    func userJoined (self, user, channel) { }
+    func userParted (self, user, channel, reason) { }
+    func userQuit (self, user, reason) { }
+    func kicked (self, kicker, channel, reason) { }
+    func userKicked (self, kicker, kickee, channel, reason) { }
+    
+    func _connectionMade (self) {
+        self.connectionMade ();
+        self.onConnectionMade (self);
+    }
+    
+    func _privmsg (self, sender, channel, command) {
+        self.privmsg (sender, channel, command);
+        self.onPrivmsg (self, sender, channel, command);
+    }
+    
+    func _joined (self, channel) {
+        self.joined (channel);
+        self.onJoined (self, channel);
+    }
+    
+    func _parted (self, channel, reason) {
+        self.parted (channel, reason);
+        self.onParted (self, channel, reason);
+    }
+    
+    func _userJoined (self, user, channel) {
+        self.userJoined (user, channel);
+        self.onUserJoined (self, user, channel);
+    }
+    
+    func _userParted (self, user, channel, reason) {
+        self.userParted (user, channel, reason);
+        self.onUserParted (self, user, channel);
+    }
+    
+    func _userQuit (self, user, reason) {
+        self.userQuit (user, reason);
+        self.onUserQuit (self, user);
+    }
+    
+    func _kicked (self, kicker, channel, reason) {
+        self.kicked (kicker, channel, reason);
+        self.onKicked (self, kicker, channel, reason);
+    }
+    
+    func _userKicked (self, kicker, kickee, channel, reason) {
+        self.userKicked (kicker, kickee, channel, reason);
+        self.onUserKicked (self, kicker, kickee, channel, reason);
+    }
+}
