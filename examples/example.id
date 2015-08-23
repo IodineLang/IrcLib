@@ -1,0 +1,22 @@
+use IRCClient from . irclib;
+
+SERVER = "107.191.108.159"; # Change to your server
+PORT = 6667;
+
+func main () {
+    
+    client = IRCClient ();
+    client.onConnectionMade += lambda (client) => {
+        client.nickname = "ExampleClient";
+    };
+     
+    client.onJoined += lambda (client, channel) => {
+        client.say (channel, "heyy");
+    };
+    
+    client.onPrivmsg += lambda (client, sender, channel, command) => {
+        print ("#{sender} #{channel} #{command}");
+        client.say (channel, command);
+    }
+    client.connect (server, port, false);
+}
