@@ -18,7 +18,7 @@ class IRCClient {
         self.realname = "IRCClient";
     }
 
-    func connect (self, ip, port, params args) {
+    func connect (self, ip, port, *args) {
         useSsl = false;
         if (args.getSize () > 0) {
             useSsl = args [0];
@@ -100,7 +100,7 @@ class IRCClient {
         }
     }
     
-    func sendRaw (self, format, params args) {
+    func sendRaw (self, format, *args) {
         self.stream.write (format.format (*args) + "\r\n");
     }
     
