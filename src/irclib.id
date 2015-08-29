@@ -10,6 +10,7 @@ class IRCClient {
         self.onJoined = Event ();
         self.onParted = Event ();
         self.onUserJoined = Event ();
+        self.onUserQuit = Event ();
         self.onKicked = Event ();
         self.onUserKicked = Event ();
         self.nick = "IRCClient";
@@ -46,7 +47,7 @@ class IRCClient {
     }
 
     func handleResponse (self, msg) {
-        print ("[" + msg + "]");
+        #print ("[" + msg + "]");
         if (msg.startsWith ("PING")) {
             self.sendRaw ("PONG :{}", msg.substr (msg.indexOf (":") + 1));
         } else if (msg.startsWith(":")) {
@@ -131,7 +132,6 @@ class IRCClient {
     func _connectionMade (self) {
         self.connectionMade ();
         self.onConnectionMade (self);
-        self.nick = "IrcClient";
     }
     
     func _privmsg (self, sender, channel, command) {
