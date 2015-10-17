@@ -1,18 +1,10 @@
 use ssl;
 use socket;
 
-class IRCClient {
+class IRCClient : EventEmitter {
     
     func IRCClient (self) {
         self.sock = socket.socket (socket.SOCK_STREAM, socket.PROTO_TCP);
-        self.onConnectionMade = Event ();
-        self.onPrivmsg = Event ();
-        self.onJoined = Event ();
-        self.onParted = Event ();
-        self.onUserJoined = Event ();
-        self.onUserQuit = Event ();
-        self.onKicked = Event ();
-        self.onUserKicked = Event ();
         self.nick = "IRCClient";
         self.hostname = "IRCClient";
         self.servername = "IRCClient";
@@ -58,13 +50,13 @@ class IRCClient {
                 prefix = prefix.split (" ");
                 if (prefix.getSize () < 2)
                     return;
-                switch (prefix [1]) {
-                    case "PRIVMSG" {
+                given (prefix [1]) {
+                    when "PRIVMSG" {
                         sender = prefix [0].substr (0, prefix[0].indexOf ("!"));
                         channel = prefix [2];
                         self._privmsg (sender, channel, command);
                     }
-                    case "JOIN" {
+                    when "JOIN" {
                         sender = prefix[0].substr (0, prefix[0].indexOf ("!"));
                         if (sender == self.nick) {
                             self._joined (command);
@@ -72,7 +64,7 @@ class IRCClient {
                             self._userJoined (sender, command);
                         }
                     }
-                    case "PART" {
+                    when "PART" {
                         sender = prefix[0].substr (0, prefix[0].indexOf ("!"));
                         if (sender == self.nick) {
                             self._parted (prefix [2], command);
@@ -80,7 +72,7 @@ class IRCClient {
                             self._userParted (sender, prefix [2], command);
                         }
                     }
-                    case "QUIT" {
+                    when "QUIT" {
                         sender = prefix[0].substr (0, prefix[0].indexOf ("!"));
                         if (sender == self.nick) {
                             self._parted (command);
@@ -88,7 +80,7 @@ class IRCClient {
                             self._userQuit (sender, command);
                         }
                     }
-                    case "KICK" {
+                    when "KICK" {
                         sender = prefix[0].substr (0, prefix[0].indexOf ("!"))
                         if (prefix [3] == self.nick) {
                             self._kicked (sender, prefix [2], command);
@@ -131,46 +123,46 @@ class IRCClient {
     
     func _connectionMade (self) {
         self.connectionMade ();
-        self.onConnectionMade (self);
+        self.emit ("connectionMade", self);
     }
     
     func _privmsg (self, sender, channel, command) {
         self.privmsg (sender, channel, command);
-        self.onPrivmsg (self, sender, channel, command);
+        self.emit ("privmsg", self, sender, channel, command);
     }
     
     func _joined (self, channel) {
         self.joined (channel);
-        self.onJoined (self, channel);
+        self.emit ("joined", self, channel);
     }
     
     func _parted (self, channel, reason) {
         self.parted (channel, reason);
-        self.onParted (self, channel, reason);
+        self.emit ("parted", self, channel, reason);
     }
     
     func _userJoined (self, user, channel) {
         self.userJoined (user, channel);
-        self.onUserJoined (self, user, channel);
+        self.emit ("userJoined", self, user, channel);
     }
     
     func _userParted (self, user, channel, reason) {
         self.userParted (user, channel, reason);
-        self.onUserParted (self, user, channel);
+        self.emit ("userParted", self, user, channel);
     }
     
     func _userQuit (self, user, reason) {
         self.userQuit (user, reason);
-        self.onUserQuit (self, user);
+        self.emit ("userQuit", self, user, reason);
     }
     
     func _kicked (self, kicker, channel, reason) {
         self.kicked (kicker, channel, reason);
-        self.onKicked (self, kicker, channel, reason);
+        self.emit ("kicked", kicker, channel, reason);
     }
     
     func _userKicked (self, kicker, kickee, channel, reason) {
         self.userKicked (kicker, kickee, channel, reason);
-        self.onUserKicked (self, kicker, kickee, channel, reason);
+        self.emit ("userKicked", self, kicker, kickee, channel, reason);
     }
 }
