@@ -82,7 +82,7 @@ class IRCClient : EventEmitter {
                     }
                     when "KICK" {
                         sender = prefix[0].substr (0, prefix[0].indexOf ("!"))
-                        if (prefix [3] == self.nick) {
+                        if (len (prefix) > 3 && prefix [3] == self.nick) {
                             self._kicked (sender, prefix [2], command);
                         } else {
                             self._userKicked (sender, prefix [2], command);
