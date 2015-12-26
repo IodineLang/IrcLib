@@ -6,17 +6,8 @@ PORT = 6667;
 func main () {
     
     client = IRCClient ();
-    client.onConnectionMade += lambda (client) => {
-        client.nickname = "ExampleClient";
-    };
-     
-    client.onJoined += lambda (client, channel) => {
+    client.on ("privmsg", lambda (client, sender, channel, message) {
         client.say (channel, "heyy");
-    };
-    
-    client.onPrivmsg += lambda (client, sender, channel, command) => {
-        print ("#{sender} #{channel} #{command}");
-        client.say (channel, command);
-    }
+    });
     client.connect (SERVER, PORT, false);
 }
