@@ -1,5 +1,6 @@
 use ssl;
 use socket;
+use EventEmitter from events;
 
 class IRCClient : EventEmitter {
     
