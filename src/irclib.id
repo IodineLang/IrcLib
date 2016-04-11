@@ -33,7 +33,7 @@ class IRCClient : EventEmitter {
         self.sendRaw ("NICK {}", self.nick);
         
         while (true) {
-            line = self.stream.readLine ().trim ();
+            line = self.stream.readln ().trim ();
             if (len (line) > 0) {
                 self.handleResponse (line);
             }
