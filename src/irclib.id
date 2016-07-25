@@ -1,95 +1,154 @@
-use ssl;
-use socket;
+use net.ssl;
+use net.socket;
+use inspect;
 use EventEmitter from events;
 
-class IRCClient : EventEmitter {
+
+func __parseIrcMessage (msg) {
+    prefix = "";
+    command = "";
+    params = [];
+    trailing = "";
+        
+    if (msg.startswith (":")) {
+        prefix = msg.substr (1, msg.index (" "));
+        msg = msg.substr (msg.index (" ") + 1).trim ();
+    }
     
-    func IRCClient (self) {
-        self.sock = socket.socket (socket.SOCK_STREAM, socket.PROTO_TCP);
-        self.nick = "IRCClient";
-        self.hostname = "IRCClient";
-        self.servername = "IRCClient";
-        self.realname = "IRCClient";
+    func parseCommand () {
+        accum = StringBuffer ();
+        i = 0;
+        while (msg[i].isalnum ()) {
+            accum.append (msg[i]);
+            i += 1
+        }
+        msg = msg.substr (i).trim ();
+        return Str (accum);
+    }
+    
+    command = parseCommand ();
+    
+    if (msg.startswith (":")) {
+        trailing = msg.substr (1);
+    } else if (msg.contains (":")) {
+        params = msg.substr (0, msg.index (":")).split (' ');
+        trailing = msg.substr (msg.index (':') + 1);
+    } else {
+        params = msg.split (' ');
+    }
+       
+    retTuple = (prefix, command, params, middle, trailing);
+    
+    # HACK Until I implement NamedTuple class
+   
+    inspect.setattribute (retTuple, "prefix", prefix);
+    inspect.setattribute (retTuple, "command", command);
+    inspect.setattribute (retTuple, "params", params);
+    inspect.setattribute (retTuple, "trailing", trailing);
+    
+    if (prefix.contains ("!")) {
+        retTuple.nick = prefix.substr (0, prefix.index ("!"));
+        prefix = prefix.substr (prefix.index ("!") + 1);
+        if (prefix.contains ("@")) {
+            retTuple.user = prefix.substr (0, prefix.index ("@"));
+            retTuple.host = prefix.substr (prefix.index ("@") + 1);
+        } else {
+            retTuple.user = prefix;
+            retTuple.host = "";
+        }
+        retTuple.server = "";
+    } else {
+        retTuple.server = prefix;
     }
 
-    func connect (self, ip, port, *args) {
-        useSsl = false;
-        if (len (args) > 0) {
-            useSsl = args [0];
-        }
+    return retTuple;
+    
+}
+
+class IrcClient extends EventEmitter {
+    
+    func IrcClient (self) {
+        self.sock = socket.socket (socket.SOCK_STREAM, socket.PROTO_TCP);
+        self.nick = "IrcClient";
+        self.hostname = "IrcClient";
+        self.servername = "IrcClient";
+        self.realname = "IrcClient";
+    }
+
+    func connect (self, ip, port = 6667, useSsl = false) {
+    
         self.ipAddress = ip;
         self.port = port;
         self.sock.connect (self.ipAddress, self.port);
-        self.stream = self.sock.getStream ();
+        self.stream = self.sock.getstream ();
+        
         if (useSsl) {
-            self.stream = ssl.wrapStream (self.stream);
+            self.stream = ssl.wrapstream (self.stream);
         }
+        
         self._connectionMade ();
+        self._initiateConnection ();
+
+        self._messageLoop ();
+    }
+
+    func _initiateConnection (self) {
         self.sendRaw ("USER {} {} {} :{}", self.nick, 
             self.hostname,
             self.servername,
-            self.realname);
+            self.realname
+        );
             
         self.sendRaw ("NICK {}", self.nick);
-        
+    }
+    
+    func _messageLoop (self) {
         while (true) {
             line = self.stream.readln ().trim ();
             if (len (line) > 0) {
-                self.handleResponse (line);
+                self._handleRequest (line);
             }
         }
     }
-
-    func handleResponse (self, msg) {
-        #print ("[" + msg + "]");
-        if (msg.startsWith ("PING")) {
-            self.sendRaw ("PONG :{}", msg.substr (msg.indexOf (":") + 1));
-        } else if (msg.startsWith(":")) {
-            prefix = msg.substr (1);
-            if (prefix.contains (":")) {
-                command = prefix.substr (prefix.indexOf(":") + 1);
-                prefix = prefix.substr (0, prefix.indexOf (":"));
-                prefix = prefix.split (" ");
-                if (len (prefix) < 2)
-                    return;
-                given (prefix [1]) {
-                    when "PRIVMSG" {
-                        sender = prefix [0].substr (0, prefix[0].indexOf ("!"));
-                        channel = prefix [2];
-                        self._privmsg (sender, channel, command);
-                    }
-                    when "JOIN" {
-                        sender = prefix[0].substr (0, prefix[0].indexOf ("!"));
-                        if (sender == self.nick) {
-                            self._joined (command);
-                        } else {
-                            self._userJoined (sender, command);
-                        }
-                    }
-                    when "PART" {
-                        sender = prefix[0].substr (0, prefix[0].indexOf ("!"));
-                        if (sender == self.nick) {
-                            self._parted (prefix [2], command);
-                        } else {
-                            self._userParted (sender, prefix [2], command);
-                        }
-                    }
-                    when "QUIT" {
-                        sender = prefix[0].substr (0, prefix[0].indexOf ("!"));
-                        if (sender == self.nick) {
-                            self._parted (command);
-                        } else {
-                            self._userQuit (sender, command);
-                        }
-                    }
-                    when "KICK" {
-                        sender = prefix[0].substr (0, prefix[0].indexOf ("!"))
-                        if (prefix [3] == self.nick) {
-                            self._kicked (sender, prefix [2], command);
-                        } else {
-                            self._userKicked (sender, prefix [2], command);
-                        }
-                    }
+    
+    func _handleRequest (self, rawMsg) {        
+        msg = __parseIrcMessage (rawMsg);
+              
+        given (msg.command) {
+        
+            when "PING" {
+                self.sendRaw ("PONG :{}", msg.trailing);            
+            }
+            
+            when "PRIVMSG" {
+                self._privmsg (msg.params[0], msg.nick, msg.trailing);
+            }
+            
+            when "JOIN" {
+                if (self.nick == msg.nick) {
+                    self._joined (msg.trailing);
+                } else {
+                    self._userJoined (msg.trailing, msg.nick);
+                }
+            }
+            
+            when "PART" {
+                if (self.nick == msg.nick) {
+                    self._parted (msg.params[0], msg.trailing);
+                } else {
+                    self._userParted (msg.params[0], msg.nick, msg.trailing);
+                }
+            }
+            
+            when "QUIT" {
+                self._userQuit (msg.nick, msg.trailing);
+            }
+            
+            when "KICK" {
+                if (msg.params [1] == self.nick) {
+                    self._kicked (msg.params [0], msg.nick, msg.trailing);
+                } else {
+                    self._userKicked (msg.params [0], msg.nick, msg.params [1], msg.trailing);
                 }
             }
         }
@@ -128,9 +187,9 @@ class IRCClient : EventEmitter {
         self.emit ("connectionMade", self);
     }
     
-    func _privmsg (self, sender, channel, command) {
-        self.privmsg (sender, channel, command);
-        self.emit ("privmsg", self, sender, channel, command);
+    func _privmsg (self, channel, sender, command) {
+        self.privmsg (channel, sender, command);
+        self.emit ("privmsg", self, channel, sender, command);
     }
     
     func _joined (self, channel) {
@@ -148,9 +207,9 @@ class IRCClient : EventEmitter {
         self.emit ("userJoined", self, user, channel);
     }
     
-    func _userParted (self, user, channel, reason) {
-        self.userParted (user, channel, reason);
-        self.emit ("userParted", self, user, channel);
+    func _userParted (self, channel, nick, reason) {
+        self.userParted (channel, nick, reason);
+        self.emit ("userParted", self, channel, nick, reason);
     }
     
     func _userQuit (self, user, reason) {
@@ -158,13 +217,13 @@ class IRCClient : EventEmitter {
         self.emit ("userQuit", self, user, reason);
     }
     
-    func _kicked (self, kicker, channel, reason) {
-        self.kicked (kicker, channel, reason);
-        self.emit ("kicked", kicker, channel, reason);
+    func _kicked (self, channel, kicker, reason) {
+        self.kicked (channel, kicker, reason);
+        self.emit ("kicked", channel, kicker, reason);
     }
     
-    func _userKicked (self, kicker, kickee, channel, reason) {
-        self.userKicked (kicker, kickee, channel, reason);
-        self.emit ("userKicked", self, kicker, kickee, channel, reason);
+    func _userKicked (self, channel, kicker, kickee, reason) {
+        self.userKicked (channel, kicker, kickee, reason);
+        self.emit ("userKicked", self, channel, kicker, kickee, reason);
     }
 }
