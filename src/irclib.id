@@ -3,7 +3,6 @@ use net.socket;
 use inspect;
 use EventEmitter from events;
 
-
 func __parseIrcMessage (msg) {
     prefix = "";
     command = "";
@@ -37,7 +36,7 @@ func __parseIrcMessage (msg) {
         params = msg.split (' ');
     }
        
-    retTuple = (prefix, command, params, middle, trailing);
+    retTuple = (prefix, command, params, trailing);
     
     # HACK Until I implement NamedTuple class
    
